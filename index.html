@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Smart Email Sender – Quickhire</title>
+  <meta charset="UTF-8" />
+  <style>
+    body { font-family: Arial; max-width: 600px; margin: auto; padding: 20px; background-color: #f9f9f9; }
+    h2 { text-align: center; }
+    input, textarea, button, select { width: 100%; margin: 10px 0; padding: 8px; }
+    label { font-weight: bold; }
+  </style>
+</head>
+<body>
+  <h2>Smart Email Sender – Quickhire.com</h2>
+  <button onclick="signIn()">🔐 Sign in with Google</button>
+  <br/><br/>
+  <label>Upload CSV File:</label>
+  <input type="file" id="fileInput" accept=".csv" />
+  <label>Message (max 100 words, use {First Name}):</label>
+  <textarea id="message" rows="4"></textarea>
+  <label>Schedule Time:</label>
+  <input type="datetime-local" id="scheduleTime" />
+  <button onclick="submitForm()">✅ Schedule Email Campaign</button>
+
+  <script>
+    let validEmails = [];
+
+    async function signIn() {
+      const res = await fetch("https://smart-backend.onrender.com/login");
+      const data = await res.json();
+      window.open(data.auth_url, "_blank");
+    }
+
+    document.getElementById("fileInput").addEventListener("change", function (e) {
+      const reader = new FileReader();
+      reader.onload = function (e) {
+        const lines = e.target.result.split("\n");
+        validEmails = [];
+        const headers = lines[0].split(",");
+        const nameIndex = headers.findIndex(h => h.trim().toLowerCase() === "name");
+        const emailIndex = headers.findIndex(h => h.trim().toLowerCase() === "email");
+        for (let i = 1; i < lines.length; i++) {
+          const cols = lines[i].split(",");
+          if (cols[emailIndex]) {
+            validEmails.push({ email: cols[emailIndex].trim(), name: cols[nameIndex]?.trim() || "" });
+          }
+        }
+        alert("✅ File parsed successfully: " + validEmails.length + " emails found.");
+      };
+      reader.readAsText(this.files[0]);
+    });
+
+    function submitForm() {
+      const message = document.getElementById("message").value;
+      const dateTime = document.getElementById("scheduleTime").value;
+      if (!validEmails.length) return alert("Upload a valid file.");
+      if (!message || message.trim().split(/\s+/).length > 100) return alert("Invalid message.");
+      if (!dateTime) return alert("Select a schedule time.");
+
+      fetch("https://smart-backend.onrender.com/send_emails", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          emails: validEmails,
+          message: message,
+          subject: "Smart Campaign – Quickhire",
+          schedule: dateTime
+        })
+      })
+        .then(res => res.json())
+        .then(data => {
+          alert("✅ Campaign scheduled. See logs for details.");
+          console.log(data);
+        })
+        .catch(err => {
+          alert("❌ Error sending campaign");
+          console.error(err);
+        });
+    }
+  </script>
+</body>
+</html>
