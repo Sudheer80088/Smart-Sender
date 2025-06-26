@@ -1,82 +1,155 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Smart Email Sender – Quickhire</title>
-  <meta charset="UTF-8" />
+  <title>Smart Email Sender</title>
+  <meta charset="UTF-8">
   <style>
-    body { font-family: Arial; max-width: 600px; margin: auto; padding: 20px; background-color: #f9f9f9; }
-    h2 { text-align: center; }
-    input, textarea, button, select { width: 100%; margin: 10px 0; padding: 8px; }
-    label { font-weight: bold; }
+    body {
+      font-family: Arial;
+      max-width: 600px;
+      margin: auto;
+      padding: 20px;
+      background-color: #f2f2f2;
+    }
+    h2 {
+      text-align: center;
+    }
+    input, textarea, button, select {
+      width: 100%;
+      margin: 10px 0;
+      padding: 10px;
+      font-size: 16px;
+    }
+    .summary {
+      background: #fff;
+      padding: 10px;
+      border-radius: 8px;
+    }
+    .note {
+      font-size: 13px;
+      color: gray;
+    }
   </style>
 </head>
 <body>
-  <h2>Smart Email Sender – Quickhire.com</h2>
-  <button onclick="signIn()">🔐 Sign in with Google</button>
-  <br/><br/>
-  <label>Upload CSV File:</label>
-  <input type="file" id="fileInput" accept=".csv" />
-  <label>Message (max 100 words, use {First Name}):</label>
-  <textarea id="message" rows="4"></textarea>
-  <label>Schedule Time:</label>
+
+  <h2>📬 Smart Email Sender</h2>
+
+  <!-- 1. Google Login (Placeholder) -->
+  <button onclick="alert('🔐 Google Login Coming Soon')">Sign in with Google</button>
+
+  <!-- 2. File Upload -->
+  <label for="emailFile">Upload Email File (.csv):</label>
+  <input type="file" id="emailFile" accept=".csv" onchange="handleFile()" />
+  <div class="note">* Required column: Email | Optional: Name</div>
+
+  <!-- 3. Email Composer -->
+  <label for="message">Email Message (≤ 100 words):</label>
+  <textarea id="message" rows="5" maxlength="1000" oninput="countWords()"></textarea>
+  <div id="wordCount" class="note">Word Count: 0 / 100</div>
+
+  <!-- 4. Schedule -->
+  <label for="scheduleTime">Schedule Date & Time:</label>
   <input type="datetime-local" id="scheduleTime" />
+
+  <!-- 5. Submit Button -->
   <button onclick="submitForm()">✅ Schedule Email Campaign</button>
 
+  <!-- 6. Summary Output -->
+  <div id="summary" class="summary"></div>
+
   <script>
-    let validEmails = [];
+    let validEmails = [], invalidEmails = [], duplicateEmails = [];
 
-    async function signIn() {
-      const res = await fetch("https://smart-backend.onrender.com/login");
-      const data = await res.json();
-      window.open(data.auth_url, "_blank");
-    }
+    function handleFile() {
+      const file = document.getElementById('emailFile').files[0];
+      if (!file) return;
 
-    document.getElementById("fileInput").addEventListener("change", function (e) {
       const reader = new FileReader();
-      reader.onload = function (e) {
-        const lines = e.target.result.split("\n");
+      reader.onload = function(e) {
+        const lines = e.target.result.split(/\r\n|\n/);
+        const header = lines[0].split(',');
+        const emailIndex = header.findIndex(col => col.trim().toLowerCase() === 'email');
+        const nameIndex = header.findIndex(col => col.trim().toLowerCase() === 'name');
+
+        if (emailIndex === -1) {
+          alert("CSV must include an 'Email' column.");
+          return;
+        }
+
+        const seen = new Set();
         validEmails = [];
-        const headers = lines[0].split(",");
-        const nameIndex = headers.findIndex(h => h.trim().toLowerCase() === "name");
-        const emailIndex = headers.findIndex(h => h.trim().toLowerCase() === "email");
+        invalidEmails = [];
+        duplicateEmails = [];
+
         for (let i = 1; i < lines.length; i++) {
-          const cols = lines[i].split(",");
-          if (cols[emailIndex]) {
-            validEmails.push({ email: cols[emailIndex].trim(), name: cols[nameIndex]?.trim() || "" });
+          const cols = lines[i].split(',');
+          const email = cols[emailIndex]?.trim();
+          const name = cols[nameIndex]?.trim() || "";
+
+          if (!email) continue;
+
+          const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+          if (!emailRegex.test(email)) {
+            invalidEmails.push(email);
+          } else if (seen.has(email)) {
+            duplicateEmails.push(email);
+          } else {
+            validEmails.push({ email, name });
+            seen.add(email);
           }
         }
-        alert("✅ File parsed successfully: " + validEmails.length + " emails found.");
+
+        showSummary();
       };
-      reader.readAsText(this.files[0]);
-    });
+
+      reader.readAsText(file);
+    }
+
+    function showSummary() {
+      document.getElementById("summary").innerHTML = `
+        <h3>📊 Validation Summary</h3>
+        ✅ Valid Emails: ${validEmails.length}<br>
+        ❌ Invalid Emails: ${invalidEmails.length}<br>
+        🔁 Duplicates: ${duplicateEmails.length}<br>
+      `;
+    }
+
+    function countWords() {
+      const text = document.getElementById("message").value;
+      const words = text.trim().split(/\s+/);
+      const wordCount = text.trim() ? words.length : 0;
+      document.getElementById("wordCount").innerText = `Word Count: ${wordCount} / 100`;
+      if (wordCount > 100) {
+        alert("Limit exceeded! Max 100 words.");
+      }
+    }
 
     function submitForm() {
       const message = document.getElementById("message").value;
       const dateTime = document.getElementById("scheduleTime").value;
-      if (!validEmails.length) return alert("Upload a valid file.");
-      if (!message || message.trim().split(/\s+/).length > 100) return alert("Invalid message.");
-      if (!dateTime) return alert("Select a schedule time.");
 
-      fetch("https://smart-backend.onrender.com/send_emails", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          emails: validEmails,
-          message: message,
-          subject: "Smart Campaign – Quickhire",
-          schedule: dateTime
-        })
-      })
-        .then(res => res.json())
-        .then(data => {
-          alert("✅ Campaign scheduled. See logs for details.");
-          console.log(data);
-        })
-        .catch(err => {
-          alert("❌ Error sending campaign");
-          console.error(err);
-        });
+      if (!validEmails.length) {
+        alert("Please upload a valid file with at least one valid email.");
+        return;
+      }
+      if (!message.trim()) {
+        alert("Message cannot be empty.");
+        return;
+      }
+      const words = message.trim().split(/\s+/);
+      if (words.length > 100) {
+        alert("Message exceeds 100-word limit.");
+        return;
+      }
+      if (!dateTime) {
+        alert("Please select schedule time.");
+        return;
+      }
+
+      alert("🎉 Emails Scheduled!\n(Backend processing will handle sending)");
     }
   </script>
+
 </body>
 </html>
